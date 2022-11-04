@@ -54,6 +54,7 @@ import com.bbn.openmap.proj.Projection;
 import com.bbn.openmap.proj.coords.GeoCoordTransformation;
 import com.bbn.openmap.proj.coords.LatLonPoint;
 import com.bbn.openmap.util.DataBounds;
+import com.bbn.openmap.util.Debug;
 import com.bbn.openmap.util.PropUtils;
 
 /**
@@ -793,11 +794,13 @@ public class SpatialIndex extends ShapeUtils {
         ssx.byteOrder(false);
         ssx.seek(100); // skip the file header
 
+        boolean setToNull = false;
         LatLonPoint llp = null;
         if (dataTransform != null) {
             llp = new LatLonPoint.Double();
         }
 
+        try {
         while (true) {
             int result = ssx.read(ixRecord, 0, SPATIAL_INDEX_RECORD_LENGTH);
             if (result <= 0) {
@@ -832,8 +835,27 @@ public class SpatialIndex extends ShapeUtils {
             }
         }
 
-        ssx.close();
+        } catch (Throwable th) {
+            Debug.error("SpatialIndex.readIndexFile(). ERROR:" + th.getMessage());
+            th.printStackTrace();
+            setToNull = true;
+        } finally {
+            if (ssx != null) {
+              ssx.close();
+            }
+            if (setToNull) {
 
+                ssx = null;
+                if (bounds != null) {
+                    bounds.reset();
+                }
+                if (entries != null) {
+                    entries.clear();
+                }
+                Debug.error("#### GOT AN EXCEPTION READING SPATIAL INDEX Retrying");
+                readIndexFile(bounds, dataTransform);
+            }
+        }
         return entries;
 
     }

@@ -1629,7 +1629,7 @@ public class MapBean extends JComponent implements ComponentListener, ContainerL
                 bufferImageResized = true;
             }
 
-            rotProjection = projectionFactory.makeProjection(proj.getClass(), center, proj.getScale(), rotBufferWidth, rotBufferHeight);
+            rotProjection = getProjectionFactory().makeProjection(proj.getClass(), center, proj.getScale(), rotBufferWidth, rotBufferHeight);
             this.rotCenter = rotProjection.forward(center);
 
             /*

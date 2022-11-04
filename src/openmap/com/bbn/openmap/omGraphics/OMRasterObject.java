@@ -166,7 +166,15 @@ public abstract class OMRasterObject extends OMGraphicAdapter implements OMGraph
     protected transient Point point2 = null;
 
     /**
-     * The width of the image after scaling, if you want the image to be a
+     * Flag to draw with offset centered with respect to the icon image
+     */
+    protected boolean centerSymbolToDraw = false;
+
+
+    /**
+     * 
+     * 
+     * /** The width of the image after scaling, if you want the image to be a
      * different size than the source.
      */
     protected int filteredWidth = 0;
@@ -210,6 +218,8 @@ public abstract class OMRasterObject extends OMGraphicAdapter implements OMGraph
     public static Logger logger = Logger.getLogger("com.bbn.openmap.omGraphics.OMRasterObject");
 
     protected transient boolean DEBUG = logger.isLoggable(Level.FINE);
+    private int xAbs;
+    private int yAbs;
 
     /**
      * A Constructor that sets the graphic type to raster, render type to
@@ -403,6 +413,25 @@ public abstract class OMRasterObject extends OMGraphicAdapter implements OMGraph
     }
 
     /**
+     * 
+     * @param p
+     * @param offsetX
+     * @param offsetY
+     * @return
+     */
+    private Point testForCenterAndSet(Point p, int offsetX, int offsetY) {
+        if (centerSymbolToDraw) {
+            p.x -= offsetX;
+            p.y -= offsetY;
+        }
+        return p;
+    }
+
+    public void setDrawSymbolAtCenter(boolean status) {
+        centerSymbolToDraw = status;
+    }
+
+    /**
      * Internally evaluates renderRotationAngle and if necessary, applies the
      * rotation to the shape. If no rotation modifications are needed, the gp is
      * returned as is.
@@ -441,6 +470,8 @@ public abstract class OMRasterObject extends OMGraphicAdapter implements OMGraph
             logger.fine("OMRasterObject: null projection in position!");
             return false;
         }
+        int offsetX = width / 2;
+        int offsetY = height / 2;
 
         projWidth = proj.getWidth();
         projHeight = proj.getHeight();
@@ -498,9 +529,23 @@ public abstract class OMRasterObject extends OMGraphicAdapter implements OMGraph
             break;
         }
 
+        
+        point1 = testForCenterAndSet(point1, offsetX, offsetY);
+        
         point2 = new Point(0, 0);
-        point2.x = point1.x + width;
-        point2.y = point1.y + height;
+        if (centerSymbolToDraw) {
+            point2.x = point1.x + width - offsetX;
+            point2.y = point1.y + height - offsetY;
+        } else {
+	    point2.x = point1.x + width;
+	    point2.y = point1.y + height;
+        }
+        xAbs = point1.x;
+        yAbs = point1.y;
+        if (centerSymbolToDraw) {
+            xAbs = point1.x + offsetX;
+            yAbs = point1.y + offsetY;
+        }
         setNeedToReposition(false);
         return true;
     }
@@ -638,6 +683,24 @@ public abstract class OMRasterObject extends OMGraphicAdapter implements OMGraph
      */
     public int getY() {
         return y;
+    }
+
+    /**
+     * Returns the xAbs attribute.
+     * 
+     * @return the xAbs value, pixels from left of window or image origin.
+     */
+    public int getXAbs() {
+        return xAbs;
+    }
+
+    /**
+     * Returns the yAbs attribute.
+     * 
+     * @return the yAbs value, pixels from left of window or image origin.
+     */
+    public int getYAbs() {
+        return yAbs;
     }
 
     /**

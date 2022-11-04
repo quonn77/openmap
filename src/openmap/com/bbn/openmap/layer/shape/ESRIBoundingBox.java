@@ -137,6 +137,10 @@ public class ESRIBoundingBox {
         }
     }
 
+    public void reset(){
+        this.max=null;
+        this.min=null;
+    }
     /**
      * Determines equality with another bounding box
      * 

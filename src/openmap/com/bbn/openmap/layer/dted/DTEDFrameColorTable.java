@@ -179,6 +179,14 @@ public class DTEDFrameColorTable {
         return tempColors;
     }
 
+    /**
+    * Control that color doesn't assume invalid values
+    */
+	private int adjustColor(int color){
+       if(color<0) return 1;
+	   if(color>255) return 255;
+	   return color;
+    }
     protected Color[] createColors(int num_colors, int adjustment) {
         if (num_colors == 0) {
             num_colors = 216;
@@ -188,7 +196,7 @@ public class DTEDFrameColorTable {
         // How many versions of each color to make up, for sloping
         int num_loops = 1;
         int modifier = (5 - adjustment) * 4;
-        int red, green, blue;
+        int red = 0, green = 0, blue = 0;
         // Re-adjust the number of colors to match the number of
         // colors
         // available.
@@ -212,25 +220,26 @@ public class DTEDFrameColorTable {
             // Color the 0 index (and the multiples) to be clear water
             tempColors[(NUM_ELEVATION_COLORS * j)] = new Color(191, 239, 255, 0);
 
+			int idxTmpColors = 0;
             for (int i = 1; i < NUM_ELEVATION_COLORS; i++) {
                 switch (j) {
                 case 0:
                     red = reds[i] - (20 - modifier) / 2;
                     green = greens[i] - (20 - modifier) / 2;
                     blue = blues[i] - (20 - modifier) / 2;
-                    tempColors[i] = new Color(red, green, blue, opaqueness);
+                    idxTmpColors = i;
                     break;
                 case 1:
                     red = reds[i] - (20 - modifier);
                     green = greens[i] - (20 - modifier);
                     blue = blues[i] - (20 - modifier);
-                    tempColors[i + NUM_ELEVATION_COLORS] = new Color(red, green, blue, opaqueness);
+                    idxTmpColors = i + NUM_ELEVATION_COLORS;
                     break;
                 case 2:
                     red = reds[i];
                     green = greens[i];
                     blue = blues[i];
-                    tempColors[i + (NUM_ELEVATION_COLORS * 2)] = new Color(red, green, blue, opaqueness);
+				    idxTmpColors = i + (NUM_ELEVATION_COLORS * 2);
                     break;
 
                 //  These settings are the original ones, where flat
@@ -267,6 +276,10 @@ public class DTEDFrameColorTable {
                 default:
                     break;
                 }
+				red = adjustColor(red);
+				green = adjustColor(green);
+                blue = adjustColor(blue);
+                tempColors[idxTmpColors] = new Color(red, green, blue, opaqueness);
             }
         }
         return tempColors;

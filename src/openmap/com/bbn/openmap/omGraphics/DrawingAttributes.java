@@ -131,7 +131,7 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
     // * The name of the property that holds the text paint for Text,
     // * in case that should be different for labels, etc.
     // */
-    // public final static String textPaintProperty = "textColor";
+    public final static String textPaintProperty = "textColor";
     /**
      * The name of the property that holds the fill paint of the graphics.
      */
@@ -202,6 +202,7 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
      * Property for the pixel radius of OMPoints. "pointRadius"
      */
     public static final String PointRadiusProperty = "pointRadius";
+    public static final String TextMatteColorProperty = "textMatteColor";
     public final static int NONE = -1;
     /**
      * The default line paint. (black)
@@ -232,6 +233,21 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
      */
     public final static float defaultDashLength = 5f;
     /**
+     * The default end cap
+     */
+    public final static int defaultEndCap = BasicStroke.CAP_BUTT;
+
+    /**
+     * the default join
+     */
+    public final static int defaultJoin = BasicStroke.JOIN_ROUND;
+
+    /**
+     * The default text Matting Paint. By Default matting for the text is
+     * disabled
+     */
+    public final static Paint defaultTextMattePaint = null;
+    /**
      * The paint to outline the shapes.
      */
     protected Paint linePaint = Color.black;
@@ -249,6 +265,10 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
      * The paint to use for matting.
      */
     protected Paint mattingPaint = Color.black;
+    /**
+     * The paint used for matting of the text
+     */
+    protected Paint textMattingPaint = null;
     /**
      * A TexturePaint pattern, if defined. Overrules fillPaint if fillPaint is
      * null or clear.
@@ -403,6 +423,7 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
         clone.pointOval = pointOval;
         clone.pointRadius = pointRadius;
         clone.enableFillPaintChoice = enableFillPaintChoice;
+        clone.textMattingPaint = textMattingPaint;
     }
 
     public boolean equals(Object obj) {
@@ -417,7 +438,8 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
                 && eqTest(da.fillPaint, fillPaint) && eqTest(da.mattingPaint, mattingPaint)
                 && eqTest(da.fillPattern, fillPattern) && eqTest(da.stroke, stroke)
                 && eqTest(da.baseScale, baseScale) && eqTest(da.matted, matted)
-                && da.pointOval == pointOval && da.pointRadius == pointRadius;
+                && da.pointOval == pointOval && da.pointRadius == pointRadius
+                && eqTest(da.textMattingPaint, textMattingPaint);
     }
 
     /**
@@ -454,6 +476,7 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
         result = HashCodeUtil.hash(result, fillPattern);
         result = HashCodeUtil.hash(result, stroke);
         result = HashCodeUtil.hash(result, matted);
+        result = HashCodeUtil.hash(result, textMattingPaint);
         return result;
     }
 
@@ -728,6 +751,14 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
      */
     public Paint getMattingPaint() {
         return mattingPaint;
+    }
+
+    public void setTextMattingPaint(Paint textMattingPaint) {
+        this.textMattingPaint = textMattingPaint;
+    }
+
+    public Paint getTextMattingPaint() {
+        return textMattingPaint;
     }
 
     /**
@@ -1434,6 +1465,8 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
         pointRadius = PropUtils.intFromProperties(props, realPrefix + PointRadiusProperty, pointRadius);
         pointOval = PropUtils.booleanFromProperties(props, realPrefix + PointOvalProperty, pointOval);
 
+        textMattingPaint = PropUtils.parseColorFromProperties(props, realPrefix
+                + TextMatteColorProperty, defaultTextMattePaint);
         float lineWidth;
         boolean basicStrokeDefined = false;
 
@@ -1512,22 +1545,40 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
             }
 
             String capPropertyString = props.getProperty(realPrefix + capProperty);
-            int cap = BasicStroke.CAP_BUTT;
+            int cap = defaultEndCap;
             if (capPropertyString != null) {
+                cap = -1;
                 try {
-                    cap = java.awt.BasicStroke.class.getField(capPropertyString).getInt(null);
-                } catch (NoSuchFieldException nsfe) {
-                } catch (IllegalAccessException iae) {
+                    cap = Integer.parseInt(capPropertyString);
+                } catch (Throwable th) {
+                    // Not set with an integer so it is a String
+                    // (CAP_BUT,CAP_ROUND, etc). Cap here is -1
+                }
+                if (cap == -1) {
+                	try {
+                    	cap = java.awt.BasicStroke.class.getField(capPropertyString).getInt(null);
+	                } catch (NoSuchFieldException nsfe) {
+    	            } catch (IllegalAccessException iae) {
+                    }
                 }
             }
 
             String joinPropertyString = props.getProperty(realPrefix + capProperty);
-            int join = BasicStroke.JOIN_MITER;
+            int join = defaultJoin;
             if (joinPropertyString != null) {
+                join = -1;
                 try {
-                    join = java.awt.BasicStroke.class.getField(joinPropertyString).getInt(null);
-                } catch (NoSuchFieldException nsfe) {
-                } catch (IllegalAccessException iae) {
+                    join = Integer.parseInt(joinPropertyString);
+                } catch (Throwable th) {
+                    // Not set with an integer so it is a String
+                    // (JOIN_ROUND,JOIN_MITER, etc.). Join here is -1
+                }
+                if (join == -1) {
+               		try {
+                   		 join = java.awt.BasicStroke.class.getField(joinPropertyString).getInt(null);
+                	} catch (NoSuchFieldException nsfe) {
+	                } catch (IllegalAccessException iae) {
+                    }
                 }
             }
 
@@ -1601,7 +1652,10 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
         if (mattingPaint instanceof Color) {
             props.put(prefix + mattingPaintProperty, PropUtils.getProperty((Color) mattingPaint));
         }
-
+		//--- Alessio Iannone ----
+        if (textMattingPaint instanceof Color) {
+            props.put(prefix + TextMatteColorProperty, PropUtils.getProperty((Color) textMattingPaint));
+        }
         props.put(prefix + PointRadiusProperty, Integer.toString(pointRadius));
         props.put(prefix + PointOvalProperty, new Boolean(pointOval).toString());
 
@@ -1738,6 +1792,11 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
         interString = i18n.get(DrawingAttributes.class, PointOvalProperty, "Points are oval");
         list.put(PointOvalProperty + LabelEditorProperty, interString);
         list.put(PointOvalProperty + ScopedEditorProperty, "com.bbn.openmap.util.propertyEditor.YesNoPropertyEditor");
+        interString = i18n.get(DrawingAttributes.class, TextMatteColorProperty, I18n.TOOLTIP, "Set the Matte Color for the Text fi ANY");
+        list.put(TextMatteColorProperty, interString);
+        interString = i18n.get(DrawingAttributes.class, TextMatteColorProperty, "Text Matte Color Property");
+        list.put(TextMatteColorProperty + LabelEditorProperty, interString);
+        list.put(TextMatteColorProperty + ScopedEditorProperty, "com.bbn.openmap.util.propertyEditor.ColorPropertyEditor");
 
         PropUtils.setI18NPropertyInfo(i18n, list, DrawingAttributes.class, capProperty, "Line Cap", "Type of cap to use on end of lines.", "com.bbn.openmap.util.propertyEditor.ComboBoxPropertyEditor");
 
@@ -1840,7 +1899,12 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
 
         if (matted) {
             if (stroke instanceof BasicStroke) {
-                g.setStroke(new BasicStroke(((BasicStroke) stroke).getLineWidth() + 2f));
+                float lWidth = ((BasicStroke) stroke).getLineWidth() + 2f;
+                int lCap = BasicStroke.CAP_BUTT;// ((BasicStroke)
+                                                // stroke).getEndCap();
+                int lJoin = BasicStroke.JOIN_ROUND;// ((BasicStroke)
+                                                   // stroke).getLineJoin();
+                g.setStroke(new BasicStroke(lWidth, lCap, lJoin));
                 g.setPaint(mattingPaint);
                 g.draw(shape);
             }
@@ -2026,7 +2090,8 @@ public class DrawingAttributes implements ActionListener, Serializable, Cloneabl
         }
 
         if (attributes.matted) {
-            BasicStroke mattedStroke = new BasicStroke(((BasicStroke) attributes.stroke).getLineWidth() + 2f);
+            float lWidth = ((BasicStroke) attributes.stroke).getLineWidth() + 2f;
+            BasicStroke mattedStroke = new BasicStroke(lWidth, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND);
             g.setStroke(mattedStroke);
             g.setPaint(attributes.mattingPaint);
             g.drawLine(0, height / 2, width, height / 2);

@@ -23,9 +23,11 @@
 //**********************************************************************
 package com.bbn.openmap.dataAccess.mapTile;
 
+import java.awt.Color;
 import java.awt.Image;
 import java.awt.Point;
 import java.awt.geom.Point2D;
+import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -281,7 +283,9 @@ public class StandardMapTileFactory extends CacheHandler implements MapTileFacto
         double y1 = Math.min(tileUL.getY(), tileLR.getY());
         double y2 = Math.max(tileUL.getY(), tileLR.getY());
 
-        return new OMScalingRaster(y2, x1, y1, x2, image);
+        OMScalingRaster raster = new OMScalingRaster(y2, x1, y1, x2, image);
+        raster.setScaleTransformType(AffineTransformOp.TYPE_BICUBIC);
+        return raster;
     }
 
     /**
@@ -822,7 +826,7 @@ public class StandardMapTileFactory extends CacheHandler implements MapTileFacto
         return tilePathBuilder.buildTilePath(x, y, z, fileExt);
     }
 
-    private TilePathBuilder tilePathBuilder = null;
+    protected TilePathBuilder tilePathBuilder = null;
 
     /**
      * Creates a unique cache key for this tile based on zoom, x, y. This method
@@ -856,6 +860,9 @@ public class StandardMapTileFactory extends CacheHandler implements MapTileFacto
             startingPath = rootDir;
         }
 
+        public void setRootDir(String rootDir){
+            this.startingPath = rootDir;
+        }
         public boolean isPatternsUsed() {
             return patternsUsed;
         }
@@ -879,7 +886,9 @@ public class StandardMapTileFactory extends CacheHandler implements MapTileFacto
         }
 
         private String buildDefaultTilePath(int x, int y, int z, String fileExt) {
-            return startingPath + "/" + z + "/" + x + "/" + y + fileExt;
+            String result = startingPath;
+            return result.concat("/").concat(String.valueOf(z)).concat("/").concat(String.valueOf(x)).concat("/")
+                    .concat(String.valueOf(y)).concat(fileExt);
         }
 
         private String updatePath(String currentPath, Pattern p, String replaceWith) {

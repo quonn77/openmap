@@ -138,6 +138,12 @@ public class DTEDCacheHandler {
     }
 
     /**
+	* Controlling opaqueness at runtime
+    */
+    public void setOpaqueness(int opaque) {
+            colortable.setOpaqueness(opaque);
+    }
+    /**
      * The method to call to let the cache handler know what the projection
      * looks like so it can figure out which frames (and subframes) will be
      * needed.

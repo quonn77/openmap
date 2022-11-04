@@ -52,6 +52,7 @@ public class OMTextLabeler extends OMText implements OMLabeler {
     public final static int ANCHOR_BOTTOMRIGHT = 8;
 
     protected int anchor = ANCHOR_CENTER;
+    protected OMGraphic labeledGraphic;
 
     /**
      * 
@@ -89,6 +90,19 @@ public class OMTextLabeler extends OMText implements OMLabeler {
         setAnchor(loc);
 
         putAttribute(OMGraphicConstants.NO_ROTATE, Boolean.TRUE);
+    }
+
+
+    public OMTextLabeler(){
+    	this("Basic");
+    }
+    
+    public void setLabeledGraphic(OMGraphic lo) {
+        labeledGraphic = lo;
+    }
+
+    public OMGraphic getLabeledGraphic() {
+        return labeledGraphic;
     }
 
     public void setLocation(GeneralPath gp) {

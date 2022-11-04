@@ -581,6 +581,8 @@ public class ShapeLayer extends OMGraphicHandlerLayer implements ActionListener,
 
         if (spatialIndex != null) {
             spatialIndex.close(true);
+            //@Alessio Iannone
+            spatialIndex = null;
         }
 
     }

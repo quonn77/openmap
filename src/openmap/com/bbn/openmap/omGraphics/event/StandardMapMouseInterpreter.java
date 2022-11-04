@@ -308,7 +308,7 @@ public class StandardMapMouseInterpreter
                     y = (int) pnt.getY();
                 }
 
-                omg = list.findClosest(x, y, 4);
+                omg = list.findClosest(x, y, 10);
             } else {
                 if (DEBUG) {
                     Debug.output("SMMI: no layer to evaluate mouse event");

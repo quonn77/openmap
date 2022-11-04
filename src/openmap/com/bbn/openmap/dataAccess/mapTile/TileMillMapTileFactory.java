@@ -24,14 +24,19 @@
 
 package com.bbn.openmap.dataAccess.mapTile;
 
+import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
 import java.util.logging.Level;
 
+import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 
 import com.bbn.openmap.Environment;
@@ -74,6 +79,9 @@ public class TileMillMapTileFactory
      * Test class to use for existence of JDBC drivers.
      */
     protected String testClass = DEFAULT_TEST_CLASS;
+    private boolean driverFound;
+    private Connection conn;
+    private Statement stat;
 
     public TileMillMapTileFactory() {
         this(null);
@@ -83,6 +91,19 @@ public class TileMillMapTileFactory
         this.rootDir = rootDir;
         this.fileExt = ".png";
         verbose = logger.isLoggable(Level.FINE);
+        Runtime.getRuntime().addShutdownHook(new Thread(){
+            public void run(){
+                if(conn!=null){
+                    try {
+                        conn.close();
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
+        
+        initDBConnection(rootDir);
     }
 
     /**
@@ -90,18 +111,12 @@ public class TileMillMapTileFactory
      */
     public CacheObject load(Object key, int x, int y, int zoomLevel, Projection proj) {
 
-        try {
-            Class.forName(testClass);
-        } catch (Exception e) {
-            logger.warning("can't locate sqlite JDBC components");
+        if(!driverFound){
             return null;
         }
 
         try {
-            Connection conn =
-                DriverManager.getConnection(rootDir);
-            Statement stat = conn.createStatement();
-
+         
             //"select zoom_level, tile_column, tile_row, tile_data from map, images where map.tile_id = images.tile_id";
             StringBuilder statement = new StringBuilder("select tile_data from map, images where");
             statement.append(" zoom_level = ").append(zoomLevel);
@@ -113,9 +128,13 @@ public class TileMillMapTileFactory
             while (rs.next()) {
                 byte[] imageBytes = rs.getBytes("tile_data");
 
-                ImageIcon ii = new ImageIcon(imageBytes);
+                boolean orig = ImageIO.getUseCache();
+                ImageIO.setUseCache(false);
+                ByteArrayInputStream bis = new ByteArrayInputStream(imageBytes);
+                BufferedImage bi = ImageIO.read(bis);
+                ImageIO.setUseCache(orig);
 
-                BufferedImage bi = BufferedImageHelper.getBufferedImage(ii.getImage(), 0, 0, -1, -1);
+                //BufferedImage bi = BufferedImageHelper.getBufferedImage(ii.getImage(), 0, 0, -1, -1);
 
                 OMGraphic raster = createOMGraphicFromBufferedImage(bi, x, y, zoomLevel, proj);
 
@@ -125,7 +144,6 @@ public class TileMillMapTileFactory
 
             }
             rs.close();
-            conn.close();
         } catch (Exception e) {
             logger.warning("something went wrong fetching image from database: " + e.getMessage());
             e.printStackTrace();
@@ -157,5 +175,35 @@ public class TileMillMapTileFactory
         prefix = PropUtils.getScopedPropertyPrefix(prefix);
 
         testClass = setList.getProperty(prefix + TEST_CLASS_PROPERTY, testClass);
+        try {
+            Class.forName(testClass);
+            driverFound = true;
+        } catch (Exception e) {
+            logger.warning("can't locate sqlite JDBC components");
+            driverFound = false;
+        }
+        
+        if(!driverFound){
+            return;
+        }
+        initDBConnection(rootDir);
+    }
+    
+    private void initDBConnection(String root){
+        if(root==null || root.length()==0){
+            logger.warning("No rootDir has been defined");
+            return;
+        }
+        try {
+            conn = DriverManager.getConnection(root);
+        } catch (SQLException e) {
+            logger.warning("Unable to open connection with rootDir:"+root);
+        }
+        
+        try{
+            stat = conn.createStatement();
+        }catch(SQLException e){
+            logger.warning("Unable to create statemnt from connection");
+        }
     }
 }

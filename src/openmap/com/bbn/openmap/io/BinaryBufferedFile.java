@@ -25,6 +25,7 @@ package com.bbn.openmap.io;
 import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 
 import com.bbn.openmap.MoreMath;
 
@@ -156,11 +157,32 @@ public class BinaryBufferedFile extends BinaryFile {
             if (bytesinbuffer < minlength) {
                 if (curptr != 0) {
                     firstbyteoffset += curptr;
-                    System.arraycopy(buffer, curptr, buffer, 0, bytesinbuffer);
-                    curptr = 0;
+					try{
+                        System.arraycopy(buffer, curptr, buffer, 0, bytesinbuffer);
+					} catch (ArrayIndexOutOfBoundsException e) {
+						;// I don't know why, but sometimes when accessing data on network storage this could happen
+                    } finally {
+                        //TODO  @author Alessio Iannone...It is right? If we have an exception we really need to set curptr to 0
+						// Actaully on slow network disk this is working....but seems no sense
+                        curptr = 0;
                 }
-                int err = super.read(buffer, bytesinbuffer, buffer.length
-                        - bytesinbuffer);
+                }
+                //Try to read data on slow disk connection (Network Disk)
+                int err = -1;
+
+                boolean hasBeenInterrupted = false;
+                int maxRetryCount=5;
+                int actualRetry=0;
+                do {
+                    try {
+                        actualRetry++;
+                        err = super.read(buffer, bytesinbuffer, buffer.length - bytesinbuffer);
+                        hasBeenInterrupted = false;
+                    } catch (InterruptedIOException iioe) {
+                        System.err.println("BinaryBufferedFile has been interrupted retrying to read. Actual Retry:"+actualRetry+" MaxRetry:"+maxRetryCount);
+                        hasBeenInterrupted = true;
+                    }
+                } while (hasBeenInterrupted && actualRetry<maxRetryCount);
                 if (err == -1) {
 
                     if (available() <= 0) {

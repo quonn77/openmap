@@ -30,6 +30,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Properties;
 import java.util.logging.Level;
 
@@ -38,6 +39,7 @@ import javax.swing.ImageIcon;
 import com.bbn.openmap.Environment;
 import com.bbn.openmap.I18n;
 import com.bbn.openmap.PropertyConsumer;
+import com.bbn.openmap.dataAccess.mapTile.StandardMapTileFactory.TilePathBuilder;
 import com.bbn.openmap.omGraphics.OMGraphic;
 import com.bbn.openmap.proj.Projection;
 import com.bbn.openmap.util.FileUtils;
@@ -61,6 +63,7 @@ import com.bbn.openmap.util.cacheHandler.CacheObject;
  * fileExt=the file extension to append to the tile names, should have a period.
  * cacheSize=the number of mapTiles the factory should hold on to. The default is 100.
  * 
+ * accessToken= Specify, eventually, the access token to use for map that needs authorization
  * # Additional properties
  * localCacheRootDir=if specified, the factory will store tiles locally at this root directory.  This directory is checked before going to the server, too.
  * </pre>
@@ -72,14 +75,21 @@ public class ServerMapTileFactory extends StandardMapTileFactory implements MapT
 
     public final static String LOCAL_CACHE_ROOT_DIR_PROPERTY = "localCacheRootDir";
 
+    public final static String ACCESS_TOKEN_PROPERTY = "accessToken";
+    public final static String LOCAL_CACHE_ERASE_PROPERTY = "eraseLocalCache";
     protected String localCacheDir = null;
+    private String accessToken;
+    
+    protected String cdnURI[];
+    private int lastCDN;
 
     public ServerMapTileFactory() {
         this(null);
     }
 
-    public ServerMapTileFactory(String rootDir) {
-        this.rootDir = rootDir;
+    public ServerMapTileFactory(String _rootDir) {
+       
+        this.rootDir = processMultiRoot(_rootDir);
         this.fileExt = ".png";
         verbose = logger.isLoggable(Level.FINE);
     }
@@ -109,6 +119,19 @@ public class ServerMapTileFactory extends StandardMapTileFactory implements MapT
              * Return null if the localized version isn't found in cache when
              * local version is defined.
              */
+            return null;
+        }else if(cdnURI!=null && zoomLevelInfo!=null){
+            String remoteCache = buildRemoteCacheKey(x, y, zoomLevel, fileExt);
+            /**
+             * If a cdn is defined, then the cache will always use the first cdn resource for the key 
+             */
+            CacheObject ret = searchCache(remoteCache);
+            if(ret!=null){
+                if(logger.isLoggable(Level.FINE)){
+                    logger.fine("found tile (" + x + ", " + y + ") in cache");
+                }
+                return ret.obj;
+            }
             return null;
         }
 
@@ -152,6 +175,9 @@ public class ServerMapTileFactory extends StandardMapTileFactory implements MapT
             // build file path here uses rootDir, which is the URL.
             String imagePath = buildFilePath(x, y, zoomLevel, fileExt);
 
+            if(accessToken!=null){
+                imagePath = imagePath.concat("?").concat(accessToken);
+            }
             imageBytes = getImageBytes(imagePath, (String) key);
 
             if (imageBytes != null && imageBytes.length > 0) {
@@ -284,7 +310,74 @@ public class ServerMapTileFactory extends StandardMapTileFactory implements MapT
         return localTilePathBuilder.buildTilePath(x, y, z, fileExt);
     }
 
+    /**
+     * Build file Path using cdn info
+     * @see com.bbn.openmap.dataAccess.mapTile.StandardMapTileFactory#buildFilePath(int, int, int, java.lang.String)
+     */
+    public String buildFilePath(int x, int y, int z, String fileExt){
+        if (tilePathBuilder == null) {
+            tilePathBuilder = new TilePathBuilder(rootDir);
+        }
+        
+        //For the path building use one of the cdn path
+        if(cdnURI!=null){
+            tilePathBuilder.setRootDir(cdnURI[(lastCDN++) % cdnURI.length]);
+        }
+        
+        return tilePathBuilder.buildTilePath(x, y, z, fileExt);
+    }
+    
+    
+    /**
+     * Remote cache key will be built using just the first of the cdn resource
+     * @param x
+     * @param y
+     * @param z
+     * @param fileExt
+     * @return
+     */
+    public String buildRemoteCacheKey(int x,int y,int z,String fileExt){
+        if (tilePathBuilder == null) {
+            tilePathBuilder = new TilePathBuilder(rootDir);
+        }
+        tilePathBuilder.setRootDir(rootDir);
+        return tilePathBuilder.buildTilePath(x, y, z, fileExt);
+    }
+    
+    /**
+     * Process Root Directory to search for cdn definition (e.g. {switch:optional-cdn1,optional-cdn2,etc.} )
+     * @param rootDirectory
+     * @return
+     */
+    private String processMultiRoot(String rootDirectory){
+        String _rootDir = rootDirectory;
+        String rootDir = _rootDir;
+        if(rootDir!=null && _rootDir.contains("{switch")){
+            int idxStart = _rootDir.indexOf("{");
+            int idxEnd =  _rootDir.indexOf("}");
+            int length = 8;
+            String head = _rootDir.substring(0,idxStart);
+            String tail = _rootDir.substring(idxEnd+1);
+            String switchSet = _rootDir.substring(idxStart+length,idxEnd);
+            String[] multiSet = switchSet.split(",");
+            cdnURI = new String[multiSet!=null?multiSet.length:0];
+            for(int i=0;multiSet!=null && i<multiSet.length;i++){
+               cdnURI[i]=head+multiSet[i]+tail;
+            }
+            rootDir = "";
+            rootDir = cdnURI[0];
+        }
+        return rootDir;
+        
+    }
+    
+    public void setRootDir(String rootDirectory) {
+        String root= processMultiRoot(rootDirectory);
+        System.out.println("StandardMapTileFactory.setRootDir() "+root);
+        super.setRootDir(root);
+    }
     private TilePathBuilder localTilePathBuilder = null;
+    private Boolean eraseLocalCache;
 
     /**
      * Creates a unique cache key for this tile based on zoom, x, y. This method
@@ -301,12 +394,16 @@ public class ServerMapTileFactory extends StandardMapTileFactory implements MapT
         if (localCacheDir != null) {
             return buildLocalFilePath(x, y, z, fileExt);
         }
+        if(cdnURI!=null){
+            return buildRemoteCacheKey(x, y, z, fileExt);
+        }
         return super.buildCacheKey(x, y, z, fileExt);
     }
 
     public Properties getProperties(Properties getList) {
         getList = super.getProperties(getList);
         getList.put(prefix + LOCAL_CACHE_ROOT_DIR_PROPERTY, PropUtils.unnull(localCacheDir));
+        getList.put(prefix + ACCESS_TOKEN_PROPERTY,PropUtils.unnull(accessToken));
         return getList;
     }
 
@@ -322,6 +419,8 @@ public class ServerMapTileFactory extends StandardMapTileFactory implements MapT
         prefix = PropUtils.getScopedPropertyPrefix(prefix);
 
         localCacheDir = setList.getProperty(prefix + LOCAL_CACHE_ROOT_DIR_PROPERTY, localCacheDir);
+        accessToken = setList.getProperty(prefix + ACCESS_TOKEN_PROPERTY,null);
+        eraseLocalCache = Boolean.valueOf(setList.getProperty(prefix+LOCAL_CACHE_ERASE_PROPERTY, "false"));
     }
 
     /**
@@ -330,6 +429,9 @@ public class ServerMapTileFactory extends StandardMapTileFactory implements MapT
      */
     public void reset() {
         super.reset();
+        if(!eraseLocalCache){
+            return;
+        }
         if (localCacheDir != null) {
             File localCacheDirFile = new File(localCacheDir);
             if (localCacheDirFile.exists()) {

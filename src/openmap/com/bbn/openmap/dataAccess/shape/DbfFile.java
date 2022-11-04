@@ -68,6 +68,7 @@ public class DbfFile
     protected Object[] _columnMask = null;
     protected java.text.DecimalFormat df;
     protected BinaryFile bf;
+	private List[] cacheRecord;
 
     protected DbfFile() {
         df = new java.text.DecimalFormat();
@@ -110,7 +111,9 @@ public class DbfFile
             _recordLength = bf.readShort();
             _columnCount = (_headerLength - 32 - 1) / 32;
             bf.skipBytes(20);
-
+            
+            //Initialize Chache of record (Remember to let this be configurable)
+            cacheRecord = new List[_rowCount];
             _names = new String[_columnCount];
             _types = new byte[_columnCount];
             _lengths = new int[_columnCount];
@@ -209,6 +212,15 @@ public class DbfFile
             throw new IOException("DbfFile not set with valid BinaryFile.");
         }
 
+        //@author Alessio Iannone
+        //First check on the cache
+        List cachedList = null;
+        
+        //FIXME Let to be able to configure if we want to use cache or not
+        if( index>=0  && index < cacheRecord.length){
+        	cachedList = this.cacheRecord[index];
+        }
+        if(cachedList!=null) return cachedList;
         bf.seek(_headerLength + index * _recordLength);
 
         /* int deleteFlag = */bf.read();
@@ -245,6 +257,7 @@ public class DbfFile
                 bf.skipBytes(((Integer) _columnMask[c]).intValue());
             }
         }
+        cacheRecord[index]=record;
         return record;
     }
 
@@ -293,7 +306,8 @@ public class DbfFile
     public static DbfTableModel getDbfTableModel(String dbf) {
         DbfFile model = null;
         try {
-            BinaryBufferedFile bbf = new BinaryBufferedFile(dbf);
+	    //BinaryFile bbf = new BinaryFile(dbf);            
+	    BinaryBufferedFile bbf = new BinaryBufferedFile(dbf);
             model = new DbfFile(bbf);
             model.close();
         } catch (Exception exception) {

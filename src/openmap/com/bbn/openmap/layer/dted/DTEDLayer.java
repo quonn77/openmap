@@ -181,6 +181,7 @@ public class DTEDLayer
     public static final String DTEDViewTypeProperty = "view.type";
     public static final String DTEDSlopeAdjustProperty = "contrast";
     public static final String DTEDBandHeightProperty = "band.height";
+    public static final String DTEDMaxScaleProperty = "max.scale";
     public static final String DTEDMinScaleProperty = "min.scale";
     public static final String DTEDKillCacheProperty = "kill.cache";
     public static final String DTEDFrameCacheSizeProperty = "cacheSize";
@@ -331,7 +332,8 @@ public class DTEDLayer
 
         // The Layer maxScale is talking the place of the DTEDLayer minScale
         // property.
-        setMaxScale(PropUtils.floatFromProperties(properties, prefix + DTEDMinScaleProperty, getMaxScale()));
+        setMaxScale(PropUtils.floatFromProperties(properties, prefix + DTEDMaxScaleProperty, getMaxScale()));
+        setMinScale(PropUtils.floatFromProperties(properties, prefix + DTEDMinScaleProperty, getMinScale()));
 
         setCacheSize((int) PropUtils.intFromProperties(properties, prefix + DTEDFrameCacheSizeProperty, getCacheSize()));
 
@@ -390,11 +392,13 @@ public class DTEDLayer
 
         OMGraphicList omGraphicList;
 
-        if (projection.getScale() < maxScale) {
+        float scale = projection.getScale();
+        if (scale <= maxScale && scale>=minScale) {
             omGraphicList = cache.getRectangle(projection);
         } else {
             fireRequestInfoLine("  The scale is too small for DTED viewing.");
-            Debug.error("DTEDLayer: scale (1:" + projection.getScale() + ") is smaller than minimum (1:" + maxScale + ") allowed.");
+            Debug.error("DTEDLayer: scale " + projection.getScale()
+                    + " is not in the allowed range [ "+minScale+" : " + maxScale + " ]");
             omGraphicList = new OMGraphicList();
         }
         // ///////////////////
@@ -536,6 +540,16 @@ public class DTEDLayer
                 cache.setOpaqueness(opaqueness);
             }
         }
+    }
+
+    /**
+     * Control transparency as a value from 0 (totally transparent = 0 ) to 1 (totally opaque = 255)
+     * @param value transparency value in the range [0,1]
+     */
+    public void setTransparency(float value) {
+        super.setTransparency(value);
+        int valueOpaque = (int) (value * 255);
+        setOpaqueness(valueOpaque);
     }
 
     /**
@@ -854,6 +868,29 @@ public class DTEDLayer
      */
     public boolean isHighlightable(OMGraphic omg) {
         return false;
+    }
+    /**
+     * Retrieve the actual elevation for the given latitude and longitude
+     * 
+     * @param latitude
+     * @param longitude
+     * @return the actual elevation for the given latitude and longitude, Integer.MIN_VALUE if no
+     *         {@link DTEDCacheManager} is available or -100 if it is undefined
+     */
+    public int getElevation(float latitude, float longitude) {
+
+        try {
+            if (cache == null) {
+                Debug.output("DTEDLayer: Creating cache! (This is a one-time operation!)");
+                cache = getCache();
+                cache.setCacheSize(cacheSize);
+                DTEDFrameSubframeInfo dfsi = new DTEDFrameSubframeInfo(viewType, bandHeight, dtedLevel, slopeAdjust);
+                cache.setSubframeInfo(dfsi);
+            }
+            return cache.getElevation(latitude, longitude);
+        } catch (Exception ex) {
+            return Integer.MIN_VALUE;
+        }
     }
 
 }
